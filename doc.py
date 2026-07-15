@@ -12,6 +12,7 @@ import fitz
 
 from config import settings
 from ocr import ocr as _ocr_raw, has_tesseract
+from table import _tsv_to_tables as tsv_to_tables
 
 _LOG = logging.getLogger("pdf")
 
@@ -166,9 +167,6 @@ class PDFDoc:
         """三路径表格提取"""
         if page in self._tabcache:
             return self._tabcache[page]
-
-        # 延迟导入避免循环引用
-        from table import _tsv_to_tables as tsv_to_tables
 
         pg = self._page(page)
         results, seen = [], set()

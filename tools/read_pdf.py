@@ -1,5 +1,4 @@
 """read_pdf: 读取 PDF 文字（自动 OCR）"""
-import os
 import logging
 
 from doc import get_doc
@@ -22,7 +21,7 @@ async def read_pdf(
         page_end: 结束页码（0 表示到最后一页）
         format: 输出格式 — "text" | "json" | "markdown"
     """
-    doc = get_doc(_resolve_path(file_path))
+    doc = get_doc(file_path)
     total = doc.pages
     end = page_end or total
 
@@ -31,8 +30,3 @@ async def read_pdf(
 
     texts = await doc.get_texts(page_start, end)
     return fmt_pages(texts, page_start, format)
-
-
-def _resolve_path(path: str) -> str:
-    """标准化文件路径"""
-    return os.path.abspath(path)

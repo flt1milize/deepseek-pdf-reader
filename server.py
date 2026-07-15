@@ -37,7 +37,7 @@ except ImportError:
 
 # ═══════════════════════════ 导入业务模块 ═══════════════════════════
 from config import settings
-from ocr import scan_langs
+from ocr import scan_langs, has_tesseract, get_tessdata
 from doc import close_docs as _close_docs
 from tools.read_pdf import read_pdf
 from tools.list_info import list_pdf_info
@@ -153,8 +153,8 @@ if _HAS_MCP_SDK:
         settings.ocr_langs = scan_langs()
         _LOG.info(
             "v5.0.0 | tesseract=%s | tessdata=%s | langs=%s | max_ocr=%d",
-            True,  # ocr.has_tesseract()
-            "",    # ocr.get_tessdata()
+            has_tesseract(),
+            get_tessdata() or "N/A",
             settings.ocr_langs,
             settings.ocr_max_concurrent,
         )

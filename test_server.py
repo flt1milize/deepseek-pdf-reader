@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Test deepseek-pdf-reader v5.0.0 — 核心功能单元测试"""
 import sys
-import asyncio
 
 # 添加当前目录到 sys.path
 sys.path.insert(0, '.')
@@ -20,14 +19,6 @@ def check_pass(desc, fn):
         import traceback
         print(f'  [FAIL] {desc} -- {e}')
         traceback.print_exc()
-
-def check_raises(desc, fn):
-    try:
-        fn()
-        errors.append(desc)
-        print(f'  [FAIL] {desc} -- expected exception, got none')
-    except Exception:
-        print(f'  [PASS] {desc}')
 
 # === 1. TSV → Table parsing ===
 print('=== 1. _tsv_to_tables ===')
@@ -76,7 +67,7 @@ r = _cluster_to_result(jagged)
 check_pass('jagged padded to 3 cols', lambda: len(r['rows'][1]) == 3)
 check_pass('padding is empty string', lambda: r['rows'][1][2] == '')
 
-# === 4. _fmt_page ===
+# === 4. fmt_page ===
 print('\n=== 4. fmt_page ===')
 
 md = fmt_page(True, 3, 'Hello World')
@@ -91,7 +82,7 @@ check_pass('empty text md', lambda: '*[无文字]*' in empty_md)
 empty_txt = fmt_page(False, 5, '')
 check_pass('empty text txt', lambda: '[无文字]' in empty_txt)
 
-# === 5. _fmt_tables ===
+# === 5. fmt_tables ===
 print('\n=== 5. fmt_tables ===')
 
 tables = [{
@@ -106,7 +97,7 @@ check_pass('table separator row', lambda: '| --- | --- |' in md_tables)
 check_pass('table data row', lambda: '| Alice | 30 |' in md_tables)
 check_pass('table stats', lambda: '3行 x 2列' in md_tables)
 
-# === 6. server module imports ===
+# === 6. Module structure & imports ===
 print('\n=== 6. Module structure ===')
 
 import config
