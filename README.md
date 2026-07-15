@@ -1,11 +1,27 @@
-# DeepSeek PDF Reader MCP Server v4.0
+# DeepSeek PDF Reader MCP Server v5.0.0
 
-[![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)](https://github.com/FLT1milize/deepseek-pdf-reader)
+[![Version](https://img.shields.io/badge/version-5.0.0-blue.svg)](https://github.com/FLT1milize/deepseek-pdf-reader)
 [![Python](https://img.shields.io/badge/python-3.10+-green.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-42%2F42%20passed-success.svg)](test_server.py)
+[![Tests](https://img.shields.io/badge/tests-30%2F30%20passed-success.svg)](test_server.py)
+[![MCP SDK](https://img.shields.io/badge/MCP%20SDK-v1.12+-orange.svg)](https://github.com/modelcontextprotocol/python-sdk)
 
 MCP 服务器，提供全面的 PDF 处理能力：文字提取（自动 OCR）、关键词搜索（支持正则）、表格提取（三路径）、页面预览（Base64 PNG）。
+
+**v5.0.0 重大更新**：基于官方 `mcp` Python SDK 重构，12 文件模块化架构，支持 SDK 模式 + 内置 JSON-RPC 兼容模式双引擎。
+
+---
+
+## 🆕 v5.0.0 vs v4.0.0
+
+| | v4.0.0 | v5.0.0 |
+|---|---|---|
+| 架构 | 单体 504 行 | 12 文件模块化 (~650 行) |
+| MCP 协议 | 手写 JSON-RPC | 官方 SDK + 内置引擎双模式 |
+| inputSchema | 手动维护 JSON Schema | SDK 模式自动生成 / 兼容模式预定义 |
+| 生命周期 | 不完整 | `lifespan` 上下文管理器 |
+| 日志 | stderr 不可见 | SDK 模式通过 `ctx.info()` 推送到客户端 |
+| 打包 | requirements.txt | pyproject.toml (PEP 621) |
 
 ## 功能概览
 
@@ -46,7 +62,7 @@ pip install -r requirements.txt
 python test_server.py
 ```
 
-预期输出：`[OK] All 42 tests passed!`
+预期输出：`[OK] All 30 tests passed!`
 
 ## 在 Cline 中配置
 
@@ -78,15 +94,26 @@ python test_server.py
 ## 架构说明
 
 ```
-server.py (504行) — 单体文件，无外部 MCP 框架依赖
-├── Tesseract 自动发现（5 路径）
-├── PDFDoc 类（线程安全缓存 + LRU 淘汰）
-├── 表格提取（PyMuPDF → block/line → TSV 聚类）
-├── JSON-RPC 2.0 协议处理
-└── 5 个 MCP 工具
+deepseek-pdf-reader/
+├── server.py          # 入口：SDK模式 + 内置JSON-RPC兼容引擎
+├── config.py          # 全局配置（Settings dataclass）
+├── ocr.py             # Tesseract 5路径自动发现 + OCR 调用
+├── doc.py             # PDFDoc 类（线程安全缓存 + LRU） + 文档池
+├── table.py           # TSV坐标 → 表格结构（无边框表格检测）
+├── format.py            # 格式化工具（text/json/markdown 输出）
+├── tools/
+│   ├── read_pdf.py       # read_pdf 工具
+│   ├── list_info.py      # list_pdf_info 工具
+│   ├── search_pdf.py     # search_pdf 工具
+│   ├── extract_tables.py # extract_tables 工具
+│   └── preview_page.py   # preview_page 工具
+├── pyproject.toml     # PEP 621 项目配置
+└── test_server.py     # 30 个单元测试
 ```
 
-核心依赖：仅 [PyMuPDF](https://pymupdf.readthedocs.io/) (fitz)，OCR 通过 subprocess 调用 Tesseract CLI。
+**双引擎设计**：优先使用官方 `mcp` SDK（自动 inputSchema、lifespan、日志推送）；若 SDK 未安装，自动回退到内置 JSON-RPC 2.0 引擎，零额外依赖可用。
+
+核心依赖：[PyMuPDF](https://pymupdf.readthedocs.io/) (fitz) + [mcp](https://github.com/modelcontextprotocol/python-sdk) (可选)，OCR 通过 subprocess 调用 Tesseract CLI。
 
 ## 许可证
 

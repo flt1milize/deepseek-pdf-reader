@@ -3,7 +3,7 @@
 "name": "io.github.FLT1milize/deepseek-pdf-reader",
   "title": "DeepSeek PDF Reader",
   "description": "PDF文字提取(自动OCR)、关键词搜索(正则)、表格提取(三路径:有边框+无边框+TSV聚类)、页面预览(Base64 PNG)",
-  "version": "4.0.0",
+"version": "5.0.0",
   "packages": [
     {
       "registryType": "pypi",
