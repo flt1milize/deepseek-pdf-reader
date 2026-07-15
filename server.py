@@ -14,7 +14,6 @@ import logging
 import os
 import sys
 import traceback
-from contextlib import suppress
 
 # ═══════════════════════════ 日志初始化 ═══════════════════════════
 logging.basicConfig(
@@ -185,12 +184,32 @@ def _send(obj: dict) -> None:
     sys.stdout.flush()
 
 
+def _respond(rid, result):
+    """构建 JSON-RPC 2.0 成功响应"""
+    if rid is not None and result is not None:
+        _send({"jsonrpc": "2.0", "id": rid, "result": result})
+
+
+def _cleanup_handler(req=None):
+    """关闭文档并返回 None（用于 shutdown/exit）"""
+    _close_docs()
+    return None
+
+
+async def _handle_builtin_call(req):
+    """处理 tools/call 请求"""
+    params = req.get("params", {})
+    args = params.get("arguments", {})
+    name = params.get("name", "")
+    return await _execute_tool(name, args)
+
+
 async def _run_builtin():
     """内置 JSON-RPC 引擎（当 mcp SDK 不可用时的回退方案）"""
     settings.ocr_langs = scan_langs()
     _LOG.info(
         "v5.0.0 (builtin) | tesseract=%s | langs=%s | max_ocr=%d",
-        True,
+        has_tesseract(),
         settings.ocr_langs,
         settings.ocr_max_concurrent,
     )
@@ -204,17 +223,11 @@ async def _run_builtin():
         "notifications/initialized": lambda _: None,
         "tools/list": lambda _: {"tools": _SCHEMA},
         "resources/list": lambda _: {"resources": []},
-        "shutdown": lambda _: (_close_docs(), None)[1],
-        "exit": lambda _: (_close_docs(), None)[1],
+        "shutdown": _cleanup_handler,
+        "exit": _cleanup_handler,
         "ping": lambda _: {},
-        "tools/call": lambda req: _handle_builtin_call(req),
+        "tools/call": _handle_builtin_call,
     }
-
-    async def _handle_builtin_call(req):
-        params = req.get("params", {})
-        args = params.get("arguments", {})
-        name = params.get("name", "")
-        return await _execute_tool(name, args)
 
     while line := sys.stdin.readline():
         try:
@@ -231,8 +244,7 @@ async def _run_builtin():
                 result = handler(req)
                 if inspect.isawaitable(result):
                     result = await result
-                if rid is not None and result is not None:
-                    _send({"jsonrpc": "2.0", "id": rid, "result": result})
+                _respond(rid, result)
             else:
                 _send({"jsonrpc": "2.0", "id": rid, "error": {"code": -32601, "message": f"未知: {method}"}})
         except SystemExit:

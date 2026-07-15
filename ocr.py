@@ -2,10 +2,8 @@
 import os
 import shutil
 import subprocess
-import tempfile
 import traceback
 import logging
-from contextlib import suppress
 
 from config import settings
 
@@ -146,27 +144,21 @@ def ocr(img: bytes, timeout: int | None = None, tsv: bool = False) -> str:
     langs = settings.ocr_langs or settings.fallback_langs
     env = tess_env()
 
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-        f.write(img)
-        tmp = f.name
-
-    try:
-        for lang in langs:
-            try:
-                args = [_TESSERACT, tmp, "stdout", "-l", lang, "--psm", "6"]
-                if tsv:
-                    args.append("tsv")
-                r = subprocess.run(
-                    args,
-                    capture_output=True,
-                    timeout=timeout,
-                    env=env,
-                )
-                if t := r.stdout.decode("utf-8", errors="replace").strip():
-                    return t
-            except Exception:
-                _LOG.warning("OCR错误(%s): %s", lang, traceback.format_exc()[:120])
-    finally:
-        with suppress(OSError):
-            os.unlink(tmp)
+    for lang in langs:
+        try:
+            # Tesseract 支持 stdin 作为输入源，无需写入临时文件
+            args = [_TESSERACT, "stdin", "stdout", "-l", lang, "--psm", "6"]
+            if tsv:
+                args.append("tsv")
+            r = subprocess.run(
+                args,
+                input=img,
+                capture_output=True,
+                timeout=timeout,
+                env=env,
+            )
+            if t := r.stdout.decode("utf-8", errors="replace").strip():
+                return t
+        except Exception:
+            _LOG.warning("OCR错误(%s): %s", lang, traceback.format_exc()[:120])
     return ""

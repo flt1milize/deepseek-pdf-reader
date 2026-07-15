@@ -4,6 +4,7 @@
 [![Python](https://img.shields.io/badge/python-3.10+-green.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-30%2F30%20passed-success.svg)](test_server.py)
+[![CI](https://github.com/FLT1milize/deepseek-pdf-reader/actions/workflows/ci.yml/badge.svg)](https://github.com/FLT1milize/deepseek-pdf-reader/actions)
 [![MCP SDK](https://img.shields.io/badge/MCP%20SDK-v1.12+-orange.svg)](https://github.com/modelcontextprotocol/python-sdk)
 
 MCP 服务器，提供全面的 PDF 处理能力：文字提取（自动 OCR）、关键词搜索（支持正则）、表格提取（三路径）、页面预览（Base64 PNG）。
