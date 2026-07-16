@@ -38,8 +38,7 @@ async def read_pdf(
 
     texts = []
     for i, p in enumerate(range(page_start, end + 1)):
-        # 逐页读取，以便推送进度
-        doc.get_text(p)  # warm cache
+        # 逐页读取 + 推送进度
         texts.append(await _read_single(doc, p))
         if ctx is not None:
             await _push_progress(ctx, i + 1, total_to_read, f"第 {p}/{end} 页")

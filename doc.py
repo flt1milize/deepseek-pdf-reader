@@ -20,10 +20,28 @@ _LOG = logging.getLogger("pdf")
 _OCR_SEM = asyncio.Semaphore(settings.ocr_max_concurrent)
 
 
-def _lru(cache: OrderedDict, maxsize: int):
-    """LRU 淘汰超出上限的缓存项"""
-    while len(cache) > maxsize:
-        cache.pop(next(iter(cache)), None)
+def resolve_and_validate(file_path: str) -> str:
+    """统一的路径标准化和基础验证
+
+    Args:
+        file_path: 用户输入的 PDF 路径
+
+    Returns:
+        标准化后的绝对路径
+
+    Raises:
+        FileNotFoundError: 文件不存在
+        MemoryError: 文件超过大小限制
+        ValueError: 非 PDF 文件
+    """
+    ap = os.path.abspath(file_path)
+    if not os.path.isfile(ap):
+        raise FileNotFoundError(f"文件不存在: {file_path}")
+    if not ap.lower().endswith('.pdf'):
+        raise ValueError(f"不是PDF文件: {file_path}")
+    if (sz := os.path.getsize(ap) / 1_048_576) > settings.max_file_size_mb:
+        raise MemoryError(f"文件过大({sz:.1f}MB)，限制{settings.max_file_size_mb}MB")
+    return ap
 
 
 @dataclass
@@ -39,14 +57,25 @@ class PDFDoc:
     _tabcache: OrderedDict[int, list[dict]] = field(default_factory=OrderedDict)
     _lock: Lock = field(default_factory=Lock)
 
-    def open(self) -> fitz.Document:
+    @staticmethod
+    def _lru(cache: OrderedDict, maxsize: int):
+        """LRU 淘汰超出上限的缓存项"""
+        while len(cache) > maxsize:
+            cache.pop(next(iter(cache)), None)
+
+    def open(self, password: str | None = None) -> fitz.Document:
         with self._lock:
             if self._doc is None:
                 doc = fitz.open(self.path)
                 if doc.needs_pass:
-                    doc.close()
-                    raise PermissionError("PDF已加密，需要密码")
-                self._doc, self._needs_pass = doc, False
+                    if password:
+                        if not doc.authenticate(password):
+                            doc.close()
+                            raise PermissionError("PDF密码错误")
+                    else:
+                        doc.close()
+                        raise PermissionError("PDF已加密，请提供密码参数打开")
+                self._doc, self._needs_pass = doc, doc.needs_pass
         return self._doc
 
     def close(self):
@@ -93,41 +122,36 @@ class PDFDoc:
         if page in self._tcache:
             return self._tcache[page]
 
-        # 尝试原生文字提取
         if t := self._page(page).get_text().strip():
             self._tcache[page] = t
-            _lru(self._tcache, settings.page_cache_size)
+            self._lru(self._tcache, settings.page_cache_size)
             return t
 
-        # 检查 OCR 缓存
         if page in self._ocache:
             cached = self._ocache[page]
             return f"[OCR] {cached}" if cached else ""
 
-        # 执行 OCR
         if has_tesseract():
             _LOG.info("page=%d OCR...", page)
             ocr_text = _ocr_raw(self.render_png(page, 3.0), settings.ocr_timeout)
             self._ocache[page] = ocr_text
-            _lru(self._ocache, settings.ocr_cache_size)
+            self._lru(self._ocache, settings.ocr_cache_size)
             if ocr_text:
                 result = f"[OCR] {ocr_text}"
                 self._tcache[page] = result
-                _lru(self._tcache, settings.page_cache_size)
+                self._lru(self._tcache, settings.page_cache_size)
                 _LOG.info("page=%d OK: %d chars", page, len(ocr_text))
                 return result
 
         self._tcache[page] = ""
-        _lru(self._tcache, settings.page_cache_size)
+        self._lru(self._tcache, settings.page_cache_size)
         return ""
 
     async def get_texts(self, start: int, end: int) -> list[str]:
         """异步并发获取多页文字"""
-
         async def _one(p):
             async with _OCR_SEM:
                 return await asyncio.to_thread(self.get_text, p)
-
         return await asyncio.gather(*[_one(p) for p in range(start, end + 1)])
 
     def _get_tsv(self, page: int) -> str:
@@ -139,7 +163,7 @@ class PDFDoc:
             self._tsvcache[page] = _ocr_raw(
                 self.render_png(page, 3.0), settings.ocr_timeout, tsv=True
             )
-            _lru(self._tsvcache, settings.tsv_cache_size)
+            self._lru(self._tsvcache, settings.tsv_cache_size)
         return self._tsvcache.get(page, "")
 
     def search(
@@ -153,7 +177,6 @@ class PDFDoc:
             pg, text = self._page(p), self.get_text(p)
             cnt = len(re.findall(pat, text))
             if not cnt:
-                # re.findall 对某些 PDF 会丢失位置信息，回退到 PyMuPDF search_for
                 try:
                     cnt = len(pg.search_for(kw))
                 except Exception:
@@ -178,24 +201,20 @@ class PDFDoc:
                 r["page"] = page
                 results.append(r)
 
-        # 方法1: find_tables（PyMuPDF 内置，检测有边框表格）
+        # 方法1: find_tables（有边框表格）
         if ft := pg.find_tables():
             for t in ft.tables:
                 rows = [
-                    r
-                    for r in (
+                    r for r in (
                         [(c or "").strip() for c in row] for row in t.extract()
-                    )
-                    if any(r)
+                    ) if any(r)
                 ]
                 if len(rows) >= 2:
-                    _add(
-                        {
-                            "rows": rows,
-                            "num_rows": len(rows),
-                            "num_cols": max(map(len, rows)),
-                        }
-                    )
+                    _add({
+                        "rows": rows,
+                        "num_rows": len(rows),
+                        "num_cols": max(map(len, rows)),
+                    })
 
         # 方法2: block/line 结构化解析
         if not results:
@@ -211,39 +230,37 @@ class PDFDoc:
                 ]
                 rows = [r for r in rows if len(r) >= 2]
                 if len(rows) >= 2:
-                    _add(
-                        {
-                            "rows": rows,
-                            "num_rows": len(rows),
-                            "num_cols": max(map(len, rows)),
-                        }
-                    )
+                    _add({
+                        "rows": rows,
+                        "num_rows": len(rows),
+                        "num_cols": max(map(len, rows)),
+                    })
 
-        # 方法3: TSV 坐标聚类（无边框表格兜底）
+        # 方法3: TSV 坐标聚类（无边框兜底）
         if not results and (tsv := self._get_tsv(page)):
             for t in tsv_to_tables(tsv):
                 if t["num_rows"] >= 2:
                     _add(t)
 
         self._tabcache[page] = results
-        _lru(self._tabcache, settings.tsv_cache_size)
+        self._lru(self._tabcache, settings.tsv_cache_size)
         return results
 
 
 # ═══════════════════════════ 全局文档缓存池 ═══════════════════════════
-
 _docs_cache: OrderedDict[str, PDFDoc] = OrderedDict()
 _docs_lock = Lock()
 
 
-def get_doc(path: str) -> PDFDoc:
-    """获取或创建 PDF 文档对象（线程安全 LRU 缓存）"""
-    ap = os.path.abspath(path)
-    if not os.path.isfile(ap):
-        raise FileNotFoundError(f"文件不存在: {path}")
-    if (sz := os.path.getsize(ap) / 1_048_576) > settings.max_file_size_mb:
-        raise MemoryError(f"文件过大({sz:.1f}MB)，限制{settings.max_file_size_mb}MB")
+def get_doc(path: str, password: str | None = None) -> PDFDoc:
+    """获取或创建 PDF 文档对象（线程安全 LRU 缓存）
 
+    Args:
+        path: PDF 文件路径
+        password: PDF 打开密码（加密文件需要）
+    """
+    ap = resolve_and_validate(path)
+    # 清理 docs_cache 的引用名也标准化
     with _docs_lock:
         if ap in _docs_cache:
             _docs_cache.move_to_end(ap)
@@ -251,7 +268,7 @@ def get_doc(path: str) -> PDFDoc:
 
     doc = PDFDoc(ap)
     try:
-        doc.open()
+        doc.open(password=password)
     except Exception:
         doc.close()
         raise

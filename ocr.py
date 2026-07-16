@@ -136,9 +136,19 @@ def ocr(img: bytes, timeout: int | None = None, tsv: bool = False) -> str:
 
     Returns:
         识别的文字内容
+    
+    Raises:
+        MemoryError: 图片超过 max_image_size_mb 上限
     """
     if not _TESSERACT:
         return ""
+
+    # 图片大小安全校验
+    img_mb = len(img) / 1_048_576
+    if img_mb > settings.max_image_size_mb:
+        raise MemoryError(
+            f"OCR图片过大({img_mb:.1f}MB)，限制{settings.max_image_size_mb}MB"
+        )
 
     timeout = timeout or settings.ocr_timeout
     langs = settings.ocr_langs or settings.fallback_langs
@@ -146,7 +156,6 @@ def ocr(img: bytes, timeout: int | None = None, tsv: bool = False) -> str:
 
     for lang in langs:
         try:
-            # Tesseract 支持 stdin 作为输入源，无需写入临时文件
             args = [_TESSERACT, "stdin", "stdout", "-l", lang, "--psm", "6"]
             if tsv:
                 args.append("tsv")
@@ -159,6 +168,12 @@ def ocr(img: bytes, timeout: int | None = None, tsv: bool = False) -> str:
             )
             if t := r.stdout.decode("utf-8", errors="replace").strip():
                 return t
+        except subprocess.TimeoutExpired:
+            _LOG.warning("OCR超时(%s, %.0fs)", lang, timeout)
         except Exception:
             _LOG.warning("OCR错误(%s): %s", lang, traceback.format_exc()[:120])
+
+    # 降级通知：说明失败原因
+    if not settings.ocr_langs and settings.fallback_langs:
+        _LOG.warning("OCR失败: 未检测到可用语言包，请安装 Tesseract 中英文语言包")
     return ""

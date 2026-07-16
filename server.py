@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MCP Server: PDF Reader v5.2.0
+"""MCP Server: PDF Reader v5.3.0
 
 功能：PDF文字提取(自动OCR) · 搜索(正则+高亮) · 表格(三路+经) · 预览 · 摘要 · 图片提取 · 单页阅读 · OCR进度推送
 
@@ -197,7 +197,7 @@ if _HAS_MCP_SDK:
         """服务器生命周期管理"""
         settings.ocr_langs = scan_langs()
         _LOG.info(
-            "v5.2.0 | tesseract=%s | tessdata=%s | langs=%s | max_ocr=%d",
+            "v5.3.0 | tesseract=%s | tessdata=%s | langs=%s | max_ocr=%d",
             has_tesseract(),
             get_tessdata() or "N/A",
             settings.ocr_langs,
@@ -210,8 +210,8 @@ if _HAS_MCP_SDK:
 
     mcp = MCPServer(
         "deepseek-pdf-reader",
-        version="5.2.0",
-        description="PDF文字提取(自动OCR) · 搜索(正则+高亮) · 表格(三路径) · 预览 · 摘要 · 图片提取 · 单页阅读",
+        version="5.3.0",
+        description="PDF文字提取(OCR+安全校验) · 搜索(高亮) · 表格(三路径) · 预览 · 摘要 · 图片 · 单页 · 密码支持",
         lifespan=lifespan,
     )
 
@@ -257,7 +257,7 @@ async def _run_builtin():
     """内置 JSON-RPC 引擎（当 mcp SDK 不可用时的回退方案）"""
     settings.ocr_langs = scan_langs()
     _LOG.info(
-        "v5.2.0 (builtin) | tesseract=%s | langs=%s | max_ocr=%d",
+        "v5.3.0 (builtin) | tesseract=%s | langs=%s | max_ocr=%d",
         has_tesseract(),
         settings.ocr_langs,
         settings.ocr_max_concurrent,
@@ -267,7 +267,7 @@ async def _run_builtin():
         "initialize": lambda _: {
             "protocolVersion": "2024-11-05",
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "deepseek-pdf-reader", "version": "5.2.0"},
+            "serverInfo": {"name": "deepseek-pdf-reader", "version": "5.3.0"},
         },
         "notifications/initialized": lambda _: None,
         "tools/list": lambda _: {"tools": _SCHEMA},
