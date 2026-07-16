@@ -1,4 +1,5 @@
-"""search_pdf: 搜索 PDF 关键词（支持正则）"""
+"""search_pdf: 搜索 PDF 关键词（支持正则 + 高亮）"""
+import re
 from doc import get_doc
 
 
@@ -9,7 +10,7 @@ async def search_pdf(
     page_end: int = 0,
     regex: bool = False,
 ) -> str:
-    """搜索 PDF 关键词，支持正则表达式。
+    """搜索 PDF 关键词，支持正则表达式，匹配词自动 Markdown 高亮。
 
     Args:
         file_path: PDF 文件路径
@@ -33,12 +34,18 @@ async def search_pdf(
     if not results:
         return f"未找到「{query}」"
 
+    # 构建用于高亮的正则模式
+    highlight_pat = re.compile(query if regex else re.escape(query), re.IGNORECASE)
+
     total_matches = sum(x["count"] for x in results)
     lines = [f"## 搜索「{query}」共 {total_matches} 处匹配\n"]
 
     for x in results:
         lines.append(f"### 第 {x['page']} 页（{x['count']} 处）")
-        lines.extend(f"> {c}" for c in x["context"])
+        for ctx_line in x["context"]:
+            # 对匹配词添加 Markdown 高亮 **keyword**
+            highlighted = highlight_pat.sub(r"**\g<0>**", ctx_line)
+            lines.append(f"> {highlighted}")
         lines.append("")
 
     return "\n".join(lines)

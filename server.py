@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""MCP Server: PDF Reader v5.0.0
+"""MCP Server: PDF Reader v5.1.0
 
-功能：PDF文字提取(自动OCR) · 关键词搜索(正则) · 表格提取(三路径) · 页面预览 · 信息查询
+功能：PDF文字提取(自动OCR) · 关键词搜索(正则) · 表格提取(三路径) · 页面预览 · 信息查询 · 单页阅读
 
 基于官方 mcp Python SDK，使用 @mcp.tool() 装饰器自动生成 inputSchema。
 兼容旧的 JSON-RPC 自实现模式 —— 当 mcp 包不可用时自动回退到内置 JSON-RPC 引擎。
@@ -27,7 +27,6 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="repla
 # ═══════════════════════════ 尝试加载官方 mcp SDK ═══════════════════════════
 try:
     from mcp.server import MCPServer
-    from mcp.server.context import Context as MCPContext
     from contextlib import asynccontextmanager
     _HAS_MCP_SDK = True
 except ImportError:
@@ -38,7 +37,7 @@ except ImportError:
 from config import settings
 from ocr import scan_langs, has_tesseract, get_tessdata
 from doc import close_docs as _close_docs
-from tools.read_pdf import read_pdf
+from tools.read_pdf import read_pdf, read_pdf_page
 from tools.list_info import list_pdf_info
 from tools.search_pdf import search_pdf
 from tools.extract_tables import extract_tables
@@ -48,6 +47,7 @@ from tools.preview_page import preview_page
 # ═══════════════════════════ 工具注册 ═══════════════════════════
 _TOOLS = {
     "read_pdf": read_pdf,
+    "read_pdf_page": read_pdf_page,
     "list_pdf_info": list_pdf_info,
     "search_pdf": search_pdf,
     "extract_tables": extract_tables,
@@ -57,7 +57,7 @@ _TOOLS = {
 _SCHEMA = [
     {
         "name": "read_pdf",
-        "description": "读取PDF文字(自动OCR)",
+        "description": "读取PDF文字(自动OCR)，支持OCR进度推送",
         "inputSchema": {
             "type": "object",
             "required": ["file_path"],
@@ -73,6 +73,22 @@ _SCHEMA = [
         },
     },
     {
+        "name": "read_pdf_page",
+        "description": "读取PDF单页文字(自动OCR)，适合交互式问答",
+        "inputSchema": {
+            "type": "object",
+            "required": ["file_path", "page_num"],
+            "properties": {
+                "file_path": {"type": "string", "description": "PDF路径"},
+                "page_num": {"type": "number", "description": "页码"},
+                "format": {
+                    "type": "string",
+                    "enum": ["text", "markdown"],
+                },
+            },
+        },
+    },
+    {
         "name": "list_pdf_info",
         "description": "PDF信息(页数/大小/加密/OCR)",
         "inputSchema": {
@@ -83,7 +99,7 @@ _SCHEMA = [
     },
     {
         "name": "search_pdf",
-        "description": "搜索关键词(支持正则)",
+        "description": "搜索关键词(支持正则)，匹配词自动高亮",
         "inputSchema": {
             "type": "object",
             "required": ["file_path", "query"],
@@ -151,7 +167,7 @@ if _HAS_MCP_SDK:
         """服务器生命周期管理"""
         settings.ocr_langs = scan_langs()
         _LOG.info(
-            "v5.0.0 | tesseract=%s | tessdata=%s | langs=%s | max_ocr=%d",
+            "v5.1.0 | tesseract=%s | tessdata=%s | langs=%s | max_ocr=%d",
             has_tesseract(),
             get_tessdata() or "N/A",
             settings.ocr_langs,
@@ -164,13 +180,14 @@ if _HAS_MCP_SDK:
 
     mcp = MCPServer(
         "deepseek-pdf-reader",
-        version="5.0.0",
-        description="PDF文字提取(自动OCR) · 关键词搜索(正则) · 表格提取(三路径) · 页面预览 · 信息查询",
+        version="5.1.0",
+        description="PDF文字提取(自动OCR) · 搜索(正则+高亮) · 表格(三路径) · 预览 · 单页阅读 · OCR进度推送",
         lifespan=lifespan,
     )
 
     # 注册工具
     mcp.add_tool(read_pdf)
+    mcp.add_tool(read_pdf_page)
     mcp.add_tool(list_pdf_info)
     mcp.add_tool(search_pdf)
     mcp.add_tool(extract_tables)
@@ -208,7 +225,7 @@ async def _run_builtin():
     """内置 JSON-RPC 引擎（当 mcp SDK 不可用时的回退方案）"""
     settings.ocr_langs = scan_langs()
     _LOG.info(
-        "v5.0.0 (builtin) | tesseract=%s | langs=%s | max_ocr=%d",
+        "v5.1.0 (builtin) | tesseract=%s | langs=%s | max_ocr=%d",
         has_tesseract(),
         settings.ocr_langs,
         settings.ocr_max_concurrent,
@@ -218,7 +235,7 @@ async def _run_builtin():
         "initialize": lambda _: {
             "protocolVersion": "2024-11-05",
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "deepseek-pdf-reader", "version": "5.0.0"},
+            "serverInfo": {"name": "deepseek-pdf-reader", "version": "5.1.0"},
         },
         "notifications/initialized": lambda _: None,
         "tools/list": lambda _: {"tools": _SCHEMA},
