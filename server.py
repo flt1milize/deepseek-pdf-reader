@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""MCP Server: PDF Reader v5.1.0
+"""MCP Server: PDF Reader v5.2.0
 
-功能：PDF文字提取(自动OCR) · 关键词搜索(正则) · 表格提取(三路径) · 页面预览 · 信息查询 · 单页阅读
+功能：PDF文字提取(自动OCR) · 搜索(正则+高亮) · 表格(三路+经) · 预览 · 摘要 · 图片提取 · 单页阅读 · OCR进度推送
 
 基于官方 mcp Python SDK，使用 @mcp.tool() 装饰器自动生成 inputSchema。
 兼容旧的 JSON-RPC 自实现模式 —— 当 mcp 包不可用时自动回退到内置 JSON-RPC 引擎。
@@ -42,6 +42,8 @@ from tools.list_info import list_pdf_info
 from tools.search_pdf import search_pdf
 from tools.extract_tables import extract_tables
 from tools.preview_page import preview_page
+from tools.summarize_pdf import summarize_pdf
+from tools.extract_images import extract_images
 
 
 # ═══════════════════════════ 工具注册 ═══════════════════════════
@@ -52,6 +54,8 @@ _TOOLS = {
     "search_pdf": search_pdf,
     "extract_tables": extract_tables,
     "preview_page": preview_page,
+    "summarize_pdf": summarize_pdf,
+    "extract_images": extract_images,
 }
 
 _SCHEMA = [
@@ -137,6 +141,32 @@ _SCHEMA = [
             },
         },
     },
+    {
+        "name": "summarize_pdf",
+        "description": "自动生成PDF内容摘要(首尾关键页)",
+        "inputSchema": {
+            "type": "object",
+            "required": ["file_path"],
+            "properties": {
+                "file_path": {"type": "string", "description": "PDF路径"},
+                "preview_pages": {"type": "number", "description": "开头预览页数（默认3）"},
+            },
+        },
+    },
+    {
+        "name": "extract_images",
+        "description": "提取PDF中嵌入的图片(Base64 PNG)",
+        "inputSchema": {
+            "type": "object",
+            "required": ["file_path"],
+            "properties": {
+                "file_path": {"type": "string", "description": "PDF路径"},
+                "page_start": {"type": "number", "description": "起始页"},
+                "page_end": {"type": "number", "description": "结束页"},
+                "page_only": {"type": "number", "description": "仅提取单页(优先于起止页)"},
+            },
+        },
+    },
 ]
 
 
@@ -167,7 +197,7 @@ if _HAS_MCP_SDK:
         """服务器生命周期管理"""
         settings.ocr_langs = scan_langs()
         _LOG.info(
-            "v5.1.0 | tesseract=%s | tessdata=%s | langs=%s | max_ocr=%d",
+            "v5.2.0 | tesseract=%s | tessdata=%s | langs=%s | max_ocr=%d",
             has_tesseract(),
             get_tessdata() or "N/A",
             settings.ocr_langs,
@@ -180,8 +210,8 @@ if _HAS_MCP_SDK:
 
     mcp = MCPServer(
         "deepseek-pdf-reader",
-        version="5.1.0",
-        description="PDF文字提取(自动OCR) · 搜索(正则+高亮) · 表格(三路径) · 预览 · 单页阅读 · OCR进度推送",
+        version="5.2.0",
+        description="PDF文字提取(自动OCR) · 搜索(正则+高亮) · 表格(三路径) · 预览 · 摘要 · 图片提取 · 单页阅读",
         lifespan=lifespan,
     )
 
@@ -192,6 +222,8 @@ if _HAS_MCP_SDK:
     mcp.add_tool(search_pdf)
     mcp.add_tool(extract_tables)
     mcp.add_tool(preview_page)
+    mcp.add_tool(summarize_pdf)
+    mcp.add_tool(extract_images)
 
 
 # ═══════════════════════════ 兼容模式：内置 JSON-RPC 引擎 ═══════════════════════════
@@ -225,7 +257,7 @@ async def _run_builtin():
     """内置 JSON-RPC 引擎（当 mcp SDK 不可用时的回退方案）"""
     settings.ocr_langs = scan_langs()
     _LOG.info(
-        "v5.1.0 (builtin) | tesseract=%s | langs=%s | max_ocr=%d",
+        "v5.2.0 (builtin) | tesseract=%s | langs=%s | max_ocr=%d",
         has_tesseract(),
         settings.ocr_langs,
         settings.ocr_max_concurrent,
@@ -235,7 +267,7 @@ async def _run_builtin():
         "initialize": lambda _: {
             "protocolVersion": "2024-11-05",
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "deepseek-pdf-reader", "version": "5.1.0"},
+            "serverInfo": {"name": "deepseek-pdf-reader", "version": "5.2.0"},
         },
         "notifications/initialized": lambda _: None,
         "tools/list": lambda _: {"tools": _SCHEMA},

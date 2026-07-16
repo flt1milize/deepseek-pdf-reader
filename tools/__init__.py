@@ -4,6 +4,8 @@ from .list_info import list_pdf_info
 from .search_pdf import search_pdf
 from .extract_tables import extract_tables
 from .preview_page import preview_page
+from .summarize_pdf import summarize_pdf
+from .extract_images import extract_images
 
 __all__ = [
     "read_pdf",
@@ -12,4 +14,6 @@ __all__ = [
     "search_pdf",
     "extract_tables",
     "preview_page",
+    "summarize_pdf",
+    "extract_images",
 ]
