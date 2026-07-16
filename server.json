@@ -1,13 +1,39 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-"name": "io.github.flt1milize/deepseek-pdf-reader",
+  "name": "io.github.flt1milize/deepseek-pdf-reader",
   "title": "DeepSeek PDF Reader",
   "description": "PDF文字提取(自动OCR) · 搜索(正则+高亮) · 表格(三路径) · 预览 · 摘要 · 图片 · 单页 · OCR进度推送",
   "version": "5.3.0",
-  "homepage": "https://github.com/FLT1milize/deepseek-pdf-reader",
+  "repository": {
+    "url": "https://github.com/FLT1milize/deepseek-pdf-reader",
+    "source": "github"
+  },
   "license": "MIT",
   "tags": ["pdf", "ocr", "tesseract", "chinese", "table-extraction", "pymupdf"],
-  "transport": {
-    "type": "stdio"
-  }
+  "packages": [
+    {
+      "registryType": "github",
+      "identifier": "flt1milize/deepseek-pdf-reader",
+      "version": "5.3.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "Tesseract OCR 可执行文件路径（可选，自动搜索）",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "TESSERACT_CMD"
+        },
+        {
+          "description": "Tesseract 语言包目录（可选，自动搜索）",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "TESSDATA_PREFIX"
+        }
+      ]
+    }
+  ]
 }
